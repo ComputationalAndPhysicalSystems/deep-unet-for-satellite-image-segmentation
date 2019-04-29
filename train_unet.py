@@ -1,6 +1,7 @@
 from unet_model import *
 from gen_patches import *
 
+import glob
 import os.path
 import numpy as np
 import tifffile as tiff
@@ -17,15 +18,22 @@ def normalize(img):
 
 
 
-N_BANDS = 8
-N_CLASSES = 5  # buildings, roads, trees, crops and water
-CLASS_WEIGHTS = [0.2, 0.3, 0.1, 0.1, 0.3]
-N_EPOCHS = 150
-UPCONV = True
-PATCH_SZ = 160   # should divide by 16
-BATCH_SIZE = 150
-TRAIN_SZ = 4000  # train size
-VAL_SZ = 1000    # validation size
+N_BANDS = 3
+N_CLASSES = 5  # BG PR PP PY O
+CLASS_WEIGHTS = [0.1, 0.3, 0.3, 0.25, 0.5]
+N_EPOCHS = 200
+UPCONV = False
+PATCH_SZ = 64    # should divide by 16
+BATCH_SIZE = 30
+TRAIN_SZ = 10000  # train size
+VAL_SZ = 2000    # validation size
+TRAIN_DIR = "/mnt/lfs2/epst0545/u_net_training/train_2/"
+
+
+
+sorted_dir_listttt = glob.glob(TRAIN_DIR + "*.npy*")
+sorted_dir_list0 = sorted(sorted_dir_listttt, key=lambda item: (int(item.partition('-')[1]) if item[1].isdigit() else float('inf'), item))#
+
 
 
 def get_model():
@@ -35,10 +43,11 @@ def get_model():
 weights_path = 'weights'
 if not os.path.exists(weights_path):
     os.makedirs(weights_path)
-weights_path += '/unet_weights.hdf5'
+weights_path += '/unet_weights_new_ayyyy.hdf5'
 
-trainIds = [str(i).zfill(2) for i in range(1, 25)]  # all availiable ids: from "01" to "24"
+trainIds = [str(i).zfill(2) for i in range(1, 28)]  # all availiable ids: from "01" to "24"
 
+numpy_listinds = 0
 
 if __name__ == '__main__':
     X_DICT_TRAIN = dict()
@@ -48,8 +57,12 @@ if __name__ == '__main__':
 
     print('Reading images')
     for img_id in trainIds:
-        img_m = normalize(tiff.imread('./data/mband/{}.tif'.format(img_id)).transpose([1, 2, 0]))
-        mask = tiff.imread('./data/gt_mband/{}.tif'.format(img_id)).transpose([1, 2, 0]) / 255
+	
+        img_m = normalize(tiff.imread('/mnt/lfs2/epst0545/u_net_training/test_2/{}.tif'.format(img_id))) #.transpose([1, 2, 0]))
+	#mask = tiff.imread('/mnt/lfs2/epst0545/u_net_training/train_2/{}.tif'.format(img_id)).transpose([1, 2, 0]) 
+        mask = np.load(sorted_dir_list0[numpy_listinds]) #.transpose([1, 2, 0])
+        numpy_listinds += 1
+
         train_xsz = int(3/4 * img_m.shape[0])  # use 75% of image as train and 25% for validation
         X_DICT_TRAIN[img_id] = img_m[:train_xsz, :, :]
         Y_DICT_TRAIN[img_id] = mask[:train_xsz, :, :]
@@ -62,6 +75,7 @@ if __name__ == '__main__':
         print("start train net")
         x_train, y_train = get_patches(X_DICT_TRAIN, Y_DICT_TRAIN, n_patches=TRAIN_SZ, sz=PATCH_SZ)
         x_val, y_val = get_patches(X_DICT_VALIDATION, Y_DICT_VALIDATION, n_patches=VAL_SZ, sz=PATCH_SZ)
+       	print(x_train.shape,x_val.shape)
         model = get_model()
         if os.path.isfile(weights_path):
             model.load_weights(weights_path)
